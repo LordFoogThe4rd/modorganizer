@@ -5,6 +5,7 @@ on:
     branches: [master]
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 env:
   VCPKG_BINARY_SOURCES: ${{ vars.AZ_BLOB_VCPKG_URL != '' && format('clear;x-azblob,{0},{1},readwrite', vars.AZ_BLOB_VCPKG_URL, secrets.AZ_BLOB_SAS) || '' }}
@@ -17,6 +18,7 @@ jobs:
         id: build-modorganizer
         uses: ModOrganizer2/build-with-mob-action@master
         with:
+          mo2-owner: ModOrganizer2
           qt-modules: qtpositioning qtwebchannel qtwebengine qtwebsockets qtnetworkauth
           mo2-dependencies: usvfs uibase bsatk esptk archive lootcli
 
@@ -25,6 +27,41 @@ jobs:
         run: |
           cmake --install vsbuild --config RelWithDebInfo
         working-directory: ./build/${{ github.event.repository.name }}
+
+      # plugin_python requires Python 3.12 exactly (see MO2_PYTHON_VERSION)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build plugins
+        shell: pwsh
+        run: |
+          $prefix = "${{ github.workspace }}\install"
+          $prefixPath = "${{ steps.build-modorganizer.outputs.cmake-prefix-path }}"
+
+          $plugins = @(
+            "modorganizer-game_bethesda",   # all Bethesda/Creation game plugins, incl. Starfield
+            "modorganizer-plugin_python",   # Python plugin host required by basic_games
+            "modorganizer-basic_games"      # Python game plugins, incl. Cyberpunk 2077
+          )
+
+          foreach ($plugin in $plugins) {
+            $dir = "${{ github.workspace }}\build\$plugin"
+            git clone --depth 1 "https://github.com/ModOrganizer2/$plugin.git" $dir
+            if ($LASTEXITCODE) { throw "checkout failed: $plugin" }
+
+            Push-Location $dir
+            if ($plugin -eq "modorganizer-basic_games") {
+              cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix" "-DVCPKG_MANIFEST_FEATURES=standalone"
+            } else {
+              cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix"
+            }
+            if ($LASTEXITCODE) { throw "configure failed: $plugin" }
+
+            cmake --build vsbuild --config RelWithDebInfo --target INSTALL --parallel 16
+            if ($LASTEXITCODE) { throw "build failed: $plugin" }
+            Pop-Location
+          }
 
       - name: Package ModOrganizer
         uses: actions/upload-artifact@master
