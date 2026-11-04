@@ -40,11 +40,11 @@ jobs:
           $prefixPath = "${{ steps.build-modorganizer.outputs.cmake-prefix-path }}"
 
           $plugins = @(
-            "modorganizer-game_bethesda",   # all Bethesda/Creation game plugins, incl. Starfield
-            "modorganizer-plugin_python",   # Python plugin host required by basic_games
-            "modorganizer-basic_games",     # Python game plugins, incl. Cyberpunk 2077
-            "modorganizer-nxmhandler",      # nxm:// link handler
-            "modorganizer-helper",          # elevated helper
+            "modorganizer-nxmhandler",              # nxm:// link handler
+            "modorganizer-helper",                  # elevated helper
+            "modorganizer-game_bethesda",           # all Bethesda/Creation games incl. Starfield
+            "modorganizer-plugin_python",           # Python plugin host
+            "modorganizer-basic_games",             # Python games incl. Cyberpunk 2077
             "modorganizer-installer_bundle",
             "modorganizer-installer_bain",
             "modorganizer-installer_fomod_csharp",
@@ -52,28 +52,52 @@ jobs:
             "modorganizer-installer_manual",
             "modorganizer-installer_omod",
             "modorganizer-installer_quick",
-            "modorganizer-installer_wizard"
+            "modorganizer-installer_wizard",
+            "modorganizer-check_fnis",
+            "modorganizer-bsapacker",
+            "modorganizer-bsa_extractor",
+            "modorganizer-diagnose_basic",
+            "modorganizer-preview_base",
+            "modorganizer-preview_bsa",
+            "modorganizer-tool_inieditor",
+            "modorganizer-tool_inibakery",
+            "modorganizer-tool_configurator"
           )
+
+          $failed = @()
 
           foreach ($plugin in $plugins) {
             $dir = "${{ github.workspace }}\build\$plugin"
-            git clone --depth 1 "https://github.com/ModOrganizer2/$plugin.git" $dir
-            if ($LASTEXITCODE) { throw "checkout failed: $plugin" }
+            try {
+              git clone --depth 1 "https://github.com/ModOrganizer2/$plugin.git" $dir
+              if ($LASTEXITCODE) { throw "checkout failed" }
 
-            Push-Location $dir
-            if ($plugin -in @("modorganizer-basic_games", "modorganizer-installer_wizard")) {
-              cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix" "-DVCPKG_MANIFEST_FEATURES=standalone"
-            } else {
-              cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix"
+              Push-Location $dir
+              try {
+                if ($plugin -in @("modorganizer-basic_games", "modorganizer-installer_wizard")) {
+                  cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix" "-DVCPKG_MANIFEST_FEATURES=standalone"
+                } else {
+                  cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix"
+                }
+                if ($LASTEXITCODE) { throw "configure failed" }
+
+                cmake --build vsbuild --config RelWithDebInfo --target INSTALL --parallel 16
+                if ($LASTEXITCODE) { throw "build failed" }
+              } finally {
+                Pop-Location
+              }
+            } catch {
+              Write-Warning "$plugin : $_"
+              $failed += $plugin
             }
-            if ($LASTEXITCODE) { throw "configure failed: $plugin" }
+          }
 
-            cmake --build vsbuild --config RelWithDebInfo --target INSTALL --parallel 16
-            if ($LASTEXITCODE) { throw "build failed: $plugin" }
-            Pop-Location
+          if ($failed.Count) {
+            throw "Failed plugins: $($failed -join ', ')"
           }
 
       - name: Package ModOrganizer
+        if: always()
         uses: actions/upload-artifact@master
         with:
           name: modorganizer
