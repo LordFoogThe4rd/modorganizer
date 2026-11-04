@@ -42,7 +42,9 @@ jobs:
           $plugins = @(
             "modorganizer-game_bethesda",   # all Bethesda/Creation game plugins, incl. Starfield
             "modorganizer-plugin_python",   # Python plugin host required by basic_games
-            "modorganizer-basic_games"      # Python game plugins, incl. Cyberpunk 2077
+            "modorganizer-basic_games",     # Python game plugins, incl. Cyberpunk 2077
+            "modorganizer-nxmhandler",      # nxm:// link handler
+            "modorganizer-helper"           # elevated helper
           )
 
           foreach ($plugin in $plugins) {
