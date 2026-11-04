@@ -44,7 +44,15 @@ jobs:
             "modorganizer-plugin_python",   # Python plugin host required by basic_games
             "modorganizer-basic_games",     # Python game plugins, incl. Cyberpunk 2077
             "modorganizer-nxmhandler",      # nxm:// link handler
-            "modorganizer-helper"           # elevated helper
+            "modorganizer-helper",          # elevated helper
+            "modorganizer-installer_bundle",
+            "modorganizer-installer_bain",
+            "modorganizer-installer_fomod_csharp",
+            "modorganizer-installer_fomod",
+            "modorganizer-installer_manual",
+            "modorganizer-installer_omod",
+            "modorganizer-installer_quick",
+            "modorganizer-installer_wizard"
           )
 
           foreach ($plugin in $plugins) {
@@ -53,7 +61,7 @@ jobs:
             if ($LASTEXITCODE) { throw "checkout failed: $plugin" }
 
             Push-Location $dir
-            if ($plugin -eq "modorganizer-basic_games") {
+            if ($plugin -in @("modorganizer-basic_games", "modorganizer-installer_wizard")) {
               cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix" "-DVCPKG_MANIFEST_FEATURES=standalone"
             } else {
               cmake --preset vs2022-windows "-DCMAKE_PREFIX_PATH=$prefixPath" "-DCMAKE_INSTALL_PREFIX=$prefix"
